@@ -1,0 +1,44 @@
+#! /usr/bin/python
+#
+# Quick and dirty converter from ING to ABN Amro format
+# Saldo  12 May 13.199,19
+import csv
+import sys
+import os
+
+if __name__ == '__main__':
+    outrows=[]
+    dates = {}
+    with open(sys.argv[1],'rb') as ing:
+        statement = csv.DictReader(ing)
+        # Convert the statement into something iterable
+        inrows = [x for x in statement]
+        # Reverse the order of elements (ING uses latest first)
+        for inrow in inrows[::-1]:
+            outrow = {}
+            outrow['Transactiedatum'] = inrow['Datum']
+            outrow['Rentedatum'] = inrow['Datum']
+            bedragstr = inrow['Bedrag (EUR)']
+            (euros, cent) = bedragstr.split(',')
+            bedragcnt = 100*int(euros) + int(cent)
+            if inrow['Af Bij'] == 'Af':
+                bedragcnt = -1 * bedragcnt
+            outrow['Beginsaldo'] = 0
+            outrow['Eindsaldo'] = 0
+            outrow['Transactiebedrag'] = bedragcnt
+            outrow['Omschrijving'] = (inrow['Naam / Omschrijving']
+                                + " " + inrow['Mededelingen'])
+            outrows.append(outrow)
+
+    outname = "out-%s-%s.csv" % (outrows[0]['Transactiedatum'],outrows[-1]['Transactiedatum'])
+    with open(outname,'wb') as abn:
+        saldo = 0
+        newsaldo = 0
+        for row in outrows:
+            newsaldo = saldo + row['Transactiebedrag']
+            row['Beginsaldo'] = saldo
+            row['Eindsaldo'] = newsaldo
+            saldo = newsaldo
+            abn.write("%s,%s,%.2f,%.2f,%.2f,%s\n" %\
+            (row['Transactiedatum'],row['Rentedatum'], row['Beginsaldo']/100.0,
+            row['Eindsaldo']/100.0,row['Transactiebedrag']/100.0,row['Omschrijving']))
